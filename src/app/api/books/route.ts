@@ -5,6 +5,8 @@ import { MAX_COVER_BYTES, saveCover } from "@/lib/covers";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
+import { getUploadsDir } from "@/lib/storage";
+
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non connecté" }, { status: 401 });
@@ -28,7 +30,7 @@ export async function POST(req: Request) {
   if (!file || !file.name.toLowerCase().endsWith(".pdf")) {
     return NextResponse.json({ error: "Fichier PDF requis" }, { status: 400 });
   }
-  const uploadsDir = path.join(process.cwd(), "uploads");
+  const uploadsDir = getUploadsDir();
   await mkdir(uploadsDir, { recursive: true });
   const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
   await writeFile(path.join(uploadsDir, fileName), Buffer.from(await file.arrayBuffer()));

@@ -3,27 +3,27 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id       String @id @default(cuid())
-  email    String @unique
-  password String
-  books    Book[]
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  books     Book[]
   positions ReadingPosition[]
 }
 
 model Book {
-  id         String  @id @default(cuid())
+  id         String   @id @default(cuid())
   userId     String
   title      String
   filePath   String
-  visibility String  @default("private")
+  visibility String   @default("private")
   pageCount  Int?
   createdAt  DateTime @default(now())
-  user       User    @relation(fields: [userId], references: [id])
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   positions  ReadingPosition[]
 
   @@index([userId, createdAt])
@@ -35,8 +35,9 @@ model ReadingPosition {
   bookId    String
   page      Int
   updatedAt DateTime @updatedAt
-  user      User @relation(fields: [userId], references: [id])
-  book      Book @relation(fields: [bookId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
   @@id([userId, bookId])
   @@index([bookId])
 }

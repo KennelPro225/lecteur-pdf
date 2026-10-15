@@ -9,6 +9,8 @@ import { Readable } from "stream";
  * Streams the PDF with HTTP Range support so pdf.js can display the first
  * pages before the whole file has been downloaded.
  */
+import { getUploadsDir } from "@/lib/storage";
+
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const book = await prisma.book.findUnique({
@@ -23,11 +25,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
   }
 
-  const abs = path.join(process.cwd(), "uploads", path.basename(book.filePath));
+  const baseName = path.basename(book.filePath);
+  const candidates = [path.join(getUploadsDir(), baseName), path.join(process.cwd(), "uploads", baseName)];
+  let abs = candidates[0];
   let info;
-  try {
-    info = await stat(abs);
-  } catch {
+  for (const c of candidates) {
+    try {
+      info = await stat(/*turbopackIgnore: true*/ c);
+      abs = c;
+      break;
+    } catch {}
+  }
+  if (!info) {
     return Response.json({ error: "Fichier manquant" }, { status: 404 });
   }
   const size = info.size;
@@ -59,7 +68,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       if (start > end || start >= size) {
         return new Response(null, { status: 416, headers: { ...baseHeaders, "Content-Range": `bytes */${size}` } });
       }
-      const stream = Readable.toWeb(createReadStream(abs, { start, end })) as ReadableStream;
+      const stream = Readable.toWeb(createReadStream(/*turbopackIgnore: true*/ abs, { start, end })) as ReadableStream;
       return new Response(stream, {
         status: 206,
         headers: {
@@ -71,6 +80,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
   }
 
-  const stream = Readable.toWeb(createReadStream(abs)) as ReadableStream;
+  const stream = Readable.toWeb(createReadStream(/*turbopackIgnore: true*/ abs)) as ReadableStream;
   return new Response(stream, { headers: { ...baseHeaders, "Content-Length": String(size) } });
 }

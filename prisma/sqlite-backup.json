@@ -1,0 +1,84 @@
+{
+  "users": [
+    {
+      "id": "cmuufz9qf0000p4dfhejzb1yg",
+      "email": "test@test.com",
+      "password": "$2b$10$OzKlrbLwUNzn6NxwfLn/CuU8iNJIrZfGtIC2O17qZKuwjwwe1L/o."
+    },
+    {
+      "id": "cmuugtew10000s0hpqu6ea9t3",
+      "email": "kennelkassi@gmail.com",
+      "password": "$2b$10$XUfE/QKfIShpmuzntkvW9e5f55kERXn.j9gt3R4ALEMk/4EehQKRO"
+    },
+    {
+      "id": "cmuuhjgwq0000z70g2zkrshfx",
+      "email": "kennelkassig12@gmail.com",
+      "password": "$2b$10$R7TLRF2wUcEgvCxsopvWsuZOLu.tuQz0lmu/pwhKDe8054z9FEVoG"
+    },
+    {
+      "id": "cmv9dqswg00001su7l08l3m7g",
+      "email": "kennelk@gmail.com",
+      "password": "$2b$10$.9PIMo.z.gin94LJ7jgvbOZSx6Ovl7H5jFJQsM8WhtcIjmyangcWy"
+    },
+    {
+      "id": "cmv9hrhzy00031su7w9ucyd9y",
+      "email": "kennelkddd@gmail.com",
+      "password": "$2b$10$nAeGJBuVLs7zucexAgV0Fe2ctuIto/AypY4ljziw9k0yJL/biUXtK"
+    }
+  ],
+  "books": [
+    {
+      "id": "cmuugud760002s0hp3x2h6wha",
+      "userId": "cmuugtew10000s0hpqu6ea9t3",
+      "title": "Pensees pour moi-meme - Marc Aurele_11376.pdf",
+      "filePath": "1791157356109-Pensees_pour_moi-meme_-_Marc_Aurele_11376.pdf",
+      "visibility": "public",
+      "pageCount": 457,
+      "createdAt": "2026-10-04T23:42:36.115Z"
+    },
+    {
+      "id": "cmuuhk1680002z70g08qblhzo",
+      "userId": "cmuuhjgwq0000z70g2zkrshfx",
+      "title": "Atteindre-lexcellence-Greene-Robert-z-lib.org_.pdf",
+      "filePath": "1791158553574-Atteindre-lexcellence-Greene-Robert-z-lib.org_.pdf",
+      "visibility": "public",
+      "pageCount": null,
+      "createdAt": "2026-10-05T00:02:33.584Z"
+    },
+    {
+      "id": "cmv9ds2rw00021su7i9jdkfst",
+      "userId": "cmv9dqswg00001su7l08l3m7g",
+      "title": "Atteindre-lexcellence-Greene-Robert",
+      "filePath": "1792059203056-Atteindre-lexcellence-Greene-Robert-z-lib.org_.pdf",
+      "visibility": "public",
+      "pageCount": 440,
+      "createdAt": "2026-10-15T10:13:23.084Z"
+    }
+  ],
+  "positions": [
+    {
+      "userId": "cmuugtew10000s0hpqu6ea9t3",
+      "bookId": "cmuugud760002s0hp3x2h6wha",
+      "page": 4,
+      "updatedAt": "2026-10-04T23:54:14.867Z"
+    },
+    {
+      "userId": "cmuuhjgwq0000z70g2zkrshfx",
+      "bookId": "cmuuhk1680002z70g08qblhzo",
+      "page": 7,
+      "updatedAt": "2026-10-05T00:09:25.277Z"
+    },
+    {
+      "userId": "cmv9dqswg00001su7l08l3m7g",
+      "bookId": "cmv9ds2rw00021su7i9jdkfst",
+      "page": 29,
+      "updatedAt": "2026-10-15T10:24:11.473Z"
+    },
+    {
+      "userId": "cmv9dqswg00001su7l08l3m7g",
+      "bookId": "cmuugud760002s0hp3x2h6wha",
+      "page": 11,
+      "updatedAt": "2026-10-15T12:04:12.744Z"
+    }
+  ]
+}

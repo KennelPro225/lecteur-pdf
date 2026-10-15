@@ -1,8 +1,9 @@
 import { mkdir, readFile, stat, writeFile } from "fs/promises";
 import path from "path";
+import { getUploadsDir } from "./storage";
 
 export const MAX_COVER_BYTES = 400 * 1024;
-const coversDir = () => path.join(process.cwd(), "uploads", "covers");
+const coversDir = () => path.join(getUploadsDir(), "covers");
 export const coverPath = (id: string) => path.join(coversDir(), `${path.basename(id)}.webp`);
 
 export async function saveCover(id: string, data: Uint8Array) {
@@ -15,4 +16,3 @@ export async function readCover(id: string) {
   const info = await stat(file);
   return { info, data: new Uint8Array(await readFile(file)) };
 }
-
