@@ -1,9 +1,12 @@
+import "dotenv/config";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "folio-reader-production-auth-secret-key-32chars",
+  trustHost: true,
   session: { strategy: "jwt" },
   providers: [
     Credentials({
