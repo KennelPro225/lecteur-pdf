@@ -1,5 +1,5 @@
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { createReadStream } from "fs";
 import { stat } from "fs/promises";
 import path from "path";
@@ -13,10 +13,7 @@ import { getUploadsDir } from "@/lib/storage";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const book = await prisma.book.findUnique({
-    where: { id },
-    select: { userId: true, visibility: true, filePath: true },
-  });
+  const book = await db.findBookById(id);
   if (!book) return Response.json({ error: "Introuvable" }, { status: 404 });
   if (book.visibility !== "public") {
     const session = await auth();

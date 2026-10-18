@@ -2,7 +2,7 @@ import "dotenv/config";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "folio-reader-production-auth-secret-key-32chars",
@@ -15,7 +15,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const email = credentials?.email as string;
         const password = credentials?.password as string;
         if (!email || !password) return null;
-        const user = await prisma.user.findUnique({ where: { email } });
+        const user = await db.findUserByEmail(email);
         if (!user || !(await bcrypt.compare(password, user.password))) return null;
         return { id: user.id, email: user.email };
       },

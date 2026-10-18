@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non connecté" }, { status: 401 });
   const { id } = await params;
-  const col = await prisma.collection.findUnique({ where: { id } });
+  const col = await db.findCollectionById(id);
   if (!col || col.userId !== session.user.id) {
     return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   }
@@ -19,10 +19,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data.color = body.color.trim();
   }
   try {
-    const updated = await prisma.collection.update({
-      where: { id },
-      data,
-    });
+    const updated = await db.updateCollection(id, data);
     return NextResponse.json(updated);
   } catch {
     return NextResponse.json({ error: "Impossible de modifier cette catégorie" }, { status: 400 });
@@ -33,10 +30,11 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non connecté" }, { status: 401 });
   const { id } = await params;
-  const col = await prisma.collection.findUnique({ where: { id } });
+  const col = await db.findCollectionById(id);
   if (!col || col.userId !== session.user.id) {
     return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   }
-  await prisma.collection.delete({ where: { id } });
+  await db.deleteCollection(id);
   return NextResponse.json({ ok: true });
 }
+

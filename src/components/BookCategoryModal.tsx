@@ -25,6 +25,8 @@ export default function BookCategoryModal({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [title, setTitle] = useState(book.title);
+  const [author, setAuthor] = useState(book.author || "Auteur inconnu");
   const [category, setCategory] = useState(book.category || "Autre");
   const [status, setStatus] = useState<ReadingStatusKey>(effectiveStatusOf(book));
   const [notes, setNotes] = useState(book.notes ?? "");
@@ -45,7 +47,6 @@ export default function BookCategoryModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [isPending, onClose]);
-
 
   const toggleCollection = (id: string) => {
     setSelectedCollections((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -81,12 +82,12 @@ export default function BookCategoryModal({
     setError("");
     startTransition(async () => {
       try {
-        const requests: Promise<Response>[] = [
+        const [bookRes, progRes] = await Promise.all([
           fetch(`/api/books/${book.id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              ...(owner ? { category } : {}),
+              ...(owner ? { title: title.trim(), author: author.trim(), category } : {}),
               collectionIds: selectedCollections,
             }),
           }),
@@ -99,8 +100,16 @@ export default function BookCategoryModal({
               notes: notes.trim() || null,
             }),
           }),
-        ];
-        await Promise.all(requests);
+        ]);
+        if (!bookRes.ok) {
+          const errData = await bookRes.json().catch(() => ({}));
+          setError(errData.error ?? "Impossible de mettre à jour ce livre");
+          return;
+        }
+        if (!progRes.ok) {
+          setError("Erreur lors de la mise à jour du statut");
+          return;
+        }
         router.refresh();
         onClose();
       } catch {
@@ -119,6 +128,7 @@ export default function BookCategoryModal({
               <IconTag width={13} height={13} /> Catégoriser & Classer
             </span>
             <h2 className="text-lg font-semibold leading-snug line-clamp-1 mt-0.5">{book.title}</h2>
+            <p className="text-xs text-stone-500">{book.author}</p>
           </div>
           <button
             type="button"
@@ -157,23 +167,44 @@ export default function BookCategoryModal({
           </div>
         </div>
 
-        {/* Book Genre / Category (editable by owner) */}
+        {/* Book Metadata & Genre / Category (editable by owner) */}
         {owner && (
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-              Catégorie / Genre du livre
-            </label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-stone-300"
-            >
-              {BOOK_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-semibold uppercase tracking-wider text-stone-500">Titre</span>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="rounded-xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-300"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-semibold uppercase tracking-wider text-stone-500">Auteur</span>
+                <input
+                  value={author}
+                  onChange={(e) => setAuthor(e.target.value)}
+                  className="rounded-xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-300"
+                />
+              </label>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+                Catégorie / Genre du livre
+              </label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-stone-300"
+              >
+                {BOOK_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         )}
 

@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.1.76", "*.local"],
   poweredByHeader: false,
+  serverExternalPackages: ["@prisma/client", ".prisma/client"],
   async headers() {
     return [
       {

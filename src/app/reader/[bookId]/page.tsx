@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { redirect, notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import ReaderClient from "@/components/reader/ReaderClient";
 
 export const metadata: Metadata = { title: "Lecture — Folio" };
@@ -14,14 +14,8 @@ export default async function ReaderPage({ params }: { params: Promise<{ bookId:
   // Book + reading position fetched in parallel; the position is passed to the
   // client so it doesn't need an extra round-trip before rendering.
   const [book, position] = await Promise.all([
-    prisma.book.findUnique({
-      where: { id: bookId },
-      select: { id: true, title: true, userId: true, visibility: true, pageCount: true },
-    }),
-    prisma.readingPosition.findUnique({
-      where: { userId_bookId: { userId, bookId } },
-      select: { page: true, updatedAt: true },
-    }),
+    db.findBookById(bookId),
+    db.getReadingPosition(userId, bookId),
   ]);
   if (!book) notFound();
   if (book.visibility !== "public" && book.userId !== userId) notFound();
@@ -39,3 +33,4 @@ export default async function ReaderPage({ params }: { params: Promise<{ bookId:
     />
   );
 }
+

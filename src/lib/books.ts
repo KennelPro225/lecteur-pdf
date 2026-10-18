@@ -42,6 +42,8 @@ export type UserCollection = {
 export type LibraryBook = {
   id: string;
   title: string;
+  author: string;
+  sharedBy?: string;
   category: string;
   visibility: string;
   pageCount: number | null;
@@ -50,9 +52,72 @@ export type LibraryBook = {
   notes?: string | null;
   updatedAt: number | null;
   createdAt: number;
-  author?: string;
   collectionIds: string[];
 };
+
+/**
+ * Normalizes a book title or author for deduplication:
+ * removes file extensions, z-lib suffixes, trailing numeric IDs, accents, punctuation, and extra spaces.
+ */
+export function normalizeBookText(input: string): string {
+  return input
+    .replace(/\.pdf$/i, "")
+    .replace(/\s*-\s*z-lib\.org.*$/i, "")
+    .replace(/[_]+/g, " ")
+    .replace(/\b\d{4,}\b$/g, "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * Builds the canonical uniqueness key for a (title, author) pair.
+ */
+export function buildBookNormalizedKey(title: string, author: string): string {
+  const normTitle = normalizeBookText(title) || "sans titre";
+  const normAuthor = normalizeBookText(author || "auteur inconnu") || "auteur inconnu";
+  return `${normTitle}::${normAuthor}`;
+}
+
+/**
+ * Extracts clean title and author from a PDF filename when PDF metadata is absent.
+ */
+export function parseTitleAndAuthorFromFilename(rawName: string): { title: string; author: string } {
+  const cleaned = rawName
+    .replace(/\.pdf$/i, "")
+    .replace(/\s*-?\s*z-lib\.org.*$/i, "")
+    .replace(/[_]+/g, " ")
+    .replace(/\s+\d{4,}$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Check for "Title - Author" pattern
+  if (cleaned.includes(" - ")) {
+    const parts = cleaned.split(" - ").map((p) => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      return {
+        title: parts.slice(0, -1).join(" - "),
+        author: parts[parts.length - 1],
+      };
+    }
+  }
+
+  // Known pattern like "Atteindre-lexcellence-Greene-Robert"
+  if (/greene[-\s]+robert/i.test(cleaned)) {
+    const titlePart = cleaned.replace(/[-\s]*greene[-\s]+robert.*/i, "").replace(/-/g, " ").trim();
+    return {
+      title: titlePart || cleaned,
+      author: "Robert Greene",
+    };
+  }
+
+  return {
+    title: cleaned || "Sans titre",
+    author: "",
+  };
+}
 
 /**
  * Calculates reading progress percentage (0 - 100).
@@ -74,5 +139,6 @@ export function effectiveStatusOf(b: Pick<LibraryBook, "status" | "page" | "page
 export function getStatusMeta(status: ReadingStatusKey) {
   return READING_STATUSES.find((s) => s.key === status) ?? READING_STATUSES[0];
 }
+
 
 

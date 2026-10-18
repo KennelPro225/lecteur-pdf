@@ -1,10 +1,10 @@
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { MAX_COVER_BYTES, readCover, saveCover } from "@/lib/covers";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const book = await prisma.book.findUnique({ where: { id }, select: { userId: true, visibility: true } });
+  const book = await db.findBookById(id);
   if (!book) return new Response(null, { status: 404 });
   if (book.visibility !== "public") {
     const session = await auth();
@@ -29,7 +29,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const session = await auth();
   if (!session?.user?.id) return Response.json({ error: "Non connecté" }, { status: 401 });
   const { id } = await params;
-  const book = await prisma.book.findUnique({ where: { id }, select: { userId: true } });
+  const book = await db.findBookById(id);
   if (!book || book.userId !== session.user.id) return Response.json({ error: "Introuvable" }, { status: 404 });
   const buf = new Uint8Array(await req.arrayBuffer());
   if (buf.byteLength === 0 || buf.byteLength > MAX_COVER_BYTES) {
@@ -38,4 +38,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   await saveCover(id, buf);
   return Response.json({ ok: true });
 }
+
 

@@ -17,17 +17,20 @@ model User {
 }
 
 model Book {
-  id          String            @id @default(cuid())
-  userId      String
-  title       String
-  category    String            @default("Autre")
-  filePath    String
-  visibility  String            @default("private")
-  pageCount   Int?
-  createdAt   DateTime          @default(now())
-  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  positions   ReadingPosition[]
-  collections CollectionBook[]
+  id            String            @id @default(cuid())
+  userId        String
+  title         String
+  author        String            @default("Auteur inconnu")
+  normalizedKey String            @unique
+  fileHash      String?           @unique
+  category      String            @default("Autre")
+  filePath      String
+  visibility    String            @default("private")
+  pageCount     Int?
+  createdAt     DateTime          @default(now())
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  positions     ReadingPosition[]
+  collections   CollectionBook[]
 
   @@index([userId, createdAt])
   @@index([visibility, createdAt])

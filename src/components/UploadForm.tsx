@@ -1,20 +1,65 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { IconClose, IconPlus, IconUpload } from "@/components/icons";
+import { IconCheck, IconClose, IconPlus, IconUpload } from "@/components/icons";
 import { loadPdfJs, renderCover } from "@/lib/pdf";
-import { BOOK_CATEGORIES, type UserCollection } from "@/lib/books";
+import { BOOK_CATEGORIES, parseTitleAndAuthorFromFilename, type UserCollection } from "@/lib/books";
 
-type Prepared = { cover: Blob | null; pageCount: number | null };
+type Prepared = {
+  cover: Blob | null;
+  pageCount: number | null;
+  pdfTitle?: string;
+  pdfAuthor?: string;
+  fileHash?: string;
+};
 
-/** Reads the PDF locally to extract a cover and the page count (max ~5 s). */
+type DuplicateBookInfo = {
+  id: string;
+  title: string;
+  author: string;
+  category: string;
+  visibility: string;
+  pageCount: number | null;
+  isOwner: boolean;
+  canAttach: boolean;
+};
+
+async function computeSha256Hex(buffer: ArrayBuffer): Promise<string | undefined> {
+  try {
+    if (typeof crypto !== "undefined" && crypto.subtle) {
+      const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+      return Array.from(new Uint8Array(hashBuffer))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+    }
+  } catch {}
+  return undefined;
+}
+
+/** Reads the PDF locally to extract a cover, page count, metadata (title/author) and SHA-256 hash (max ~5 s). */
 async function prepare(file: File): Promise<Prepared> {
   const work = (async () => {
+    const rawBuffer = await file.arrayBuffer();
+    const fileHashPromise = computeSha256Hex(rawBuffer);
     const pdfjs = await loadPdfJs();
-    const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+    const task = pdfjs.getDocument({ data: new Uint8Array(rawBuffer) });
     try {
       const doc = await task.promise;
-      return { cover: await renderCover(doc), pageCount: doc.numPages };
+      let pdfTitle: string | undefined;
+      let pdfAuthor: string | undefined;
+      try {
+        const meta = await doc.getMetadata();
+        const info = meta?.info as Record<string, unknown> | undefined;
+        if (info && typeof info.Title === "string" && info.Title.trim()) {
+          pdfTitle = info.Title.trim();
+        }
+        if (info && typeof info.Author === "string" && info.Author.trim()) {
+          pdfAuthor = info.Author.trim();
+        }
+      } catch {}
+      const [cover, fileHash] = await Promise.all([renderCover(doc), fileHashPromise]);
+      return { cover, pageCount: doc.numPages, pdfTitle, pdfAuthor, fileHash };
     } finally {
       void task.destroy();
     }
@@ -22,14 +67,6 @@ async function prepare(file: File): Promise<Prepared> {
   const timeout = new Promise<Prepared>((r) => setTimeout(() => r({ cover: null, pageCount: null }), 5000));
   return Promise.race([work, timeout]).catch(() => ({ cover: null, pageCount: null }));
 }
-
-const titleFromFile = (name: string) =>
-  name
-    .replace(/\.pdf$/i, "")
-    .replace(/[_]+/g, " ")
-    .replace(/\s*-\s*z-lib\.org.*$/i, "")
-    .replace(/\s+/g, " ")
-    .trim();
 
 export default function UploadForm({
   variant = "button",
@@ -40,6 +77,8 @@ export default function UploadForm({
 }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
+  const [author, setAuthor] = useState("");
+  const [fileHash, setFileHash] = useState<string | undefined>(undefined);
   const [category, setCategory] = useState<string>("Roman & Fiction");
   const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -48,6 +87,8 @@ export default function UploadForm({
   const [isPublic, setIsPublic] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [duplicate, setDuplicate] = useState<{ reason: string; book: DuplicateBookInfo } | null>(null);
+  const [attaching, setAttaching] = useState(false);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -61,8 +102,38 @@ export default function UploadForm({
 
   useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
 
+  // Live duplicate check when title, author, or fileHash changes
+  useEffect(() => {
+    if (!open) return;
+    const trimmedTitle = title.trim();
+    const trimmedAuthor = author.trim();
+    const timer = setTimeout(async () => {
+      if (!trimmedTitle && !fileHash) {
+        setDuplicate(null);
+        return;
+      }
+      try {
+        const params = new URLSearchParams();
+        if (trimmedTitle) params.set("title", trimmedTitle);
+        if (trimmedAuthor) params.set("author", trimmedAuthor);
+        if (fileHash) params.set("hash", fileHash);
+        const res = await fetch(`/api/books/check?${params.toString()}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.exists && data.book) {
+          setDuplicate({ reason: data.reason, book: data.book });
+        } else {
+          setDuplicate(null);
+        }
+      } catch {}
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [open, title, author, fileHash]);
+
   const reset = () => {
     setTitle("");
+    setAuthor("");
+    setFileHash(undefined);
     setCategory("Roman & Fiction");
     setSelectedCollections([]);
     setFile(null);
@@ -70,6 +141,8 @@ export default function UploadForm({
     setPrepared(null);
     setProgress(null);
     setError("");
+    setDuplicate(null);
+    setAttaching(false);
     setIsPublic(false);
   };
 
@@ -84,21 +157,64 @@ export default function UploadForm({
       return;
     }
     setError("");
+    setDuplicate(null);
     setFile(f);
-    setTitle((t) => t || titleFromFile(f.name));
+    const parsedFromName = parseTitleAndAuthorFromFilename(f.name);
+    setTitle((t) => t || parsedFromName.title);
+    setAuthor((a) => a || parsedFromName.author);
+
     const p = prepare(f);
     setPrepared(p);
-    void p.then((r) => r.cover && setPreview(URL.createObjectURL(r.cover)));
+    void p.then((r) => {
+      if (r.cover) setPreview(URL.createObjectURL(r.cover));
+      if (r.fileHash) setFileHash(r.fileHash);
+      if (r.pdfTitle && r.pdfTitle.length > 2 && !/\.pdf$/i.test(r.pdfTitle)) {
+        setTitle((curr) => (curr === parsedFromName.title || !curr ? r.pdfTitle! : curr));
+      }
+      if (r.pdfAuthor && r.pdfAuthor.length > 1) {
+        setAuthor((curr) => curr || r.pdfAuthor!);
+      }
+    });
+  };
+
+  const handleAttachExisting = async () => {
+    if (!duplicate?.book || attaching) return;
+    setAttaching(true);
+    setError("");
+    try {
+      const res = await fetch("/api/books/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookId: duplicate.book.id,
+          collectionIds: selectedCollections,
+        }),
+      });
+      if (res.ok) {
+        setOpen(false);
+        reset();
+        router.refresh();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? "Impossible de rattacher ce livre");
+      }
+    } catch {
+      setError("Erreur réseau");
+    } finally {
+      setAttaching(false);
+    }
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file || progress != null) return;
+    if (!file || progress != null || duplicate) return;
     setProgress(0);
+    setError("");
     const { cover, pageCount } = (await prepared) ?? { cover: null, pageCount: null };
     const fd = new FormData();
     fd.append("file", file);
-    fd.append("title", title);
+    fd.append("title", title.trim());
+    fd.append("author", author.trim() || "Auteur inconnu");
     fd.append("category", category);
     fd.append("visibility", isPublic ? "public" : "private");
     for (const cid of selectedCollections) {
@@ -118,7 +234,12 @@ export default function UploadForm({
       } else {
         setProgress(null);
         try {
-          setError(JSON.parse(xhr.responseText).error ?? "Échec de l'envoi");
+          const resp = JSON.parse(xhr.responseText);
+          if (xhr.status === 409 && resp.duplicate && resp.book) {
+            setDuplicate({ reason: resp.reason, book: resp.book });
+          } else {
+            setError(resp.error ?? "Échec de l'envoi");
+          }
         } catch {
           setError("Échec de l'envoi");
         }
@@ -200,15 +321,72 @@ export default function UploadForm({
               <input ref={inputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
             </div>
 
-            <label className="flex flex-col gap-1.5 text-sm">
-              <span className="text-stone-600">Titre</span>
-              <input
-                className="rounded-xl border border-stone-200 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-stone-300"
-                placeholder="Titre du livre"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="flex flex-col gap-1.5 text-sm">
+                <span className="text-stone-600">Titre du livre</span>
+                <input
+                  required
+                  className="rounded-xl border border-stone-200 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-stone-300"
+                  placeholder="Ex: Pensées pour moi-même"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-sm">
+                <span className="text-stone-600">Auteur</span>
+                <input
+                  required
+                  className="rounded-xl border border-stone-200 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-stone-300"
+                  placeholder="Ex: Marc Aurèle"
+                  value={author}
+                  onChange={(e) => setAuthor(e.target.value)}
+                />
+              </label>
+            </div>
+
+            {duplicate && (
+              <div className="rounded-2xl border border-amber-300 bg-amber-50/90 p-3.5 text-xs text-amber-950 flex flex-col gap-2.5">
+                <div>
+                  <p className="font-semibold text-amber-900">
+                    {duplicate.reason === "file_hash"
+                      ? "Ce fichier PDF exact est déjà présent sur l'application"
+                      : "Un livre avec ce même titre et cet auteur existe déjà"}
+                  </p>
+                  <p className="mt-0.5 text-amber-800">
+                    « <span className="font-medium">{duplicate.book.title}</span> » par{" "}
+                    <span className="font-medium">{duplicate.book.author}</span> ({duplicate.book.category})
+                  </p>
+                </div>
+
+                {duplicate.book.canAttach ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!duplicate.book.isOwner && (
+                      <button
+                        type="button"
+                        onClick={handleAttachExisting}
+                        disabled={attaching}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-ink text-paper px-3 py-2 text-xs font-medium hover:bg-stone-700 disabled:opacity-50 transition-colors"
+                      >
+                        <IconCheck width={14} height={14} />
+                        {attaching ? "Rattachement…" : "Rattacher à ma bibliothèque"}
+                      </button>
+                    )}
+                    <Link
+                      href={`/reader/${duplicate.book.id}`}
+                      onClick={() => setOpen(false)}
+                      className="inline-flex items-center gap-1 rounded-xl border border-amber-400 bg-white px-3 py-2 text-xs font-medium text-amber-950 hover:bg-amber-100 transition-colors"
+                    >
+                      Ouvrir et lire maintenant →
+                    </Link>
+                  </div>
+                ) : (
+                  <p className="text-amber-800">
+                    Ce livre a déjà été importé en mode privé sur la plateforme. Les doublons ne sont pas autorisés.
+                  </p>
+                )}
+              </div>
+            )}
 
             <label className="flex flex-col gap-1.5 text-sm">
               <span className="text-stone-600">Catégorie du livre</span>
@@ -262,14 +440,20 @@ export default function UploadForm({
             {error && <p className="text-sm text-red-600">{error}</p>}
 
             <button
-              disabled={!file || progress != null}
+              disabled={!file || progress != null || Boolean(duplicate)}
               className="relative overflow-hidden rounded-xl bg-ink text-paper py-3 font-medium hover:bg-stone-700 disabled:opacity-50 transition-colors"
             >
               {progress != null && (
                 <span className="absolute inset-y-0 left-0 bg-white/20 transition-[width]" style={{ width: `${progress * 100}%` }} />
               )}
               <span className="relative">
-                {progress == null ? "Ajouter à ma bibliothèque" : progress < 1 ? `Envoi… ${Math.round(progress * 100)} %` : "Finalisation…"}
+                {duplicate
+                  ? "Livre déjà existant (voir ci-dessus)"
+                  : progress == null
+                  ? "Ajouter à ma bibliothèque"
+                  : progress < 1
+                  ? `Envoi… ${Math.round(progress * 100)} %`
+                  : "Finalisation…"}
               </span>
             </button>
           </form>
@@ -278,4 +462,5 @@ export default function UploadForm({
     </>
   );
 }
+
 

@@ -100,6 +100,9 @@ export default function BookCard({
         >
           {book.title}
         </Link>
+        {book.author && (
+          <p className="mt-0.5 text-xs text-stone-500 truncate">{book.author}</p>
+        )}
 
         {bookCollections.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
@@ -125,8 +128,8 @@ export default function BookCard({
         )}
 
         <div className="mt-auto pt-1.5 flex items-center justify-between gap-2">
-          {book.author ? (
-            <span className="text-xs text-stone-500 truncate">{book.author}</span>
+          {book.sharedBy ? (
+            <span className="text-[11px] text-stone-400 truncate">Partagé par {book.sharedBy}</span>
           ) : (
             <span />
           )}

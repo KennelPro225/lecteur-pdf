@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import UploadForm from "@/components/UploadForm";
 import LibraryGrid from "@/components/LibraryGrid";
 import BookCover from "@/components/BookCover";
@@ -20,52 +20,22 @@ export default async function Home() {
   const userId = session.user.id;
 
   const [rows, collectionRows] = await Promise.all([
-    prisma.book.findMany({
-      where: {
-        OR: [
-          { userId },
-          { positions: { some: { userId } } },
-          { collections: { some: { collection: { userId } } } },
-        ],
-      },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        userId: true,
-        title: true,
-        category: true,
-        visibility: true,
-        pageCount: true,
-        createdAt: true,
-        user: { select: { email: true } },
-        positions: {
-          where: { userId },
-          select: { page: true, status: true, notes: true, updatedAt: true },
-          take: 1,
-        },
-        collections: {
-          where: { collection: { userId } },
-          select: { collectionId: true },
-        },
-      },
-    }),
-    prisma.collection.findMany({
-      where: { userId },
-      orderBy: { createdAt: "asc" },
-      include: { _count: { select: { books: true } } },
-    }),
+    db.listLibraryBooksForUser(userId),
+    db.listUserCollections(userId),
   ]);
 
   const collections: UserCollection[] = collectionRows.map((c) => ({
     id: c.id,
     name: c.name,
     color: c.color,
-    bookCount: c._count.books,
+    bookCount: c.bookCount ?? 0,
   }));
 
   const books: LibraryBook[] = rows.map((b) => ({
     id: b.id,
     title: b.title,
+    author: b.author || "Auteur inconnu",
+    sharedBy: b.userId === userId ? undefined : b.user?.email.split("@")[0],
     category: b.category || "Autre",
     visibility: b.visibility,
     pageCount: b.pageCount,
@@ -74,7 +44,6 @@ export default async function Home() {
     status: (b.positions[0]?.status as ReadingStatusKey | undefined) ?? null,
     notes: b.positions[0]?.notes ?? null,
     updatedAt: b.positions[0]?.updatedAt.getTime() ?? null,
-    author: b.userId === userId ? undefined : b.user.email.split("@")[0],
     collectionIds: b.collections.map((c) => c.collectionId),
   }));
 

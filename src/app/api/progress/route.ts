@@ -1,5 +1,5 @@
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 
 const VALID_STATUSES = new Set(["to_read", "reading", "completed", "favorite", "paused"]);
 
@@ -25,17 +25,12 @@ async function save(req: Request) {
   }
 
   const userId = session.user.id;
-  const book = await prisma.book.findUnique({
-    where: { id: bookId },
-    select: { userId: true, visibility: true, pageCount: true },
-  });
+  const book = await db.findBookById(bookId);
   if (!book || (book.visibility !== "public" && book.userId !== userId)) {
     return Response.json({ error: "Introuvable" }, { status: 404 });
   }
 
-  const existing = await prisma.readingPosition.findUnique({
-    where: { userId_bookId: { userId, bookId } },
-  });
+  const existing = await db.getReadingPosition(userId, bookId);
 
   const safePage = hasPage ? Math.max(1, Math.floor(page as number)) : existing?.page ?? 1;
   const effPageCount =
@@ -52,36 +47,21 @@ async function save(req: Request) {
   }
 
   const nextNotes = hasNotes ? (notes as string | null) : existing?.notes ?? null;
+  const newPageCount =
+    typeof pageCount === "number" && pageCount > 0 && book.pageCount !== pageCount
+      ? Math.floor(pageCount)
+      : undefined;
 
-  const ops = [
-    prisma.readingPosition.upsert({
-      where: { userId_bookId: { userId, bookId } },
-      update: {
-        ...(hasPage ? { page: safePage } : {}),
-        status: nextStatus,
-        ...(hasNotes ? { notes: nextNotes } : {}),
-      },
-      create: {
-        userId,
-        bookId,
-        page: safePage,
-        status: nextStatus,
-        notes: nextNotes,
-      },
-      select: { page: true, status: true, notes: true },
-    }),
-  ] as const;
+  const pos = await db.upsertReadingPosition({
+    userId,
+    bookId,
+    page: safePage,
+    status: nextStatus,
+    notes: nextNotes,
+    pageCount: newPageCount,
+  });
 
-  if (typeof pageCount === "number" && pageCount > 0 && book.pageCount !== pageCount) {
-    const [pos] = await prisma.$transaction([
-      ...ops,
-      prisma.book.update({ where: { id: bookId }, data: { pageCount: Math.floor(pageCount) }, select: { id: true } }),
-    ]);
-    return Response.json(pos);
-  } else {
-    const pos = await ops[0];
-    return Response.json(pos);
-  }
+  return Response.json({ page: pos.page, status: pos.status, notes: pos.notes });
 }
 
 export const PUT = save;
@@ -93,10 +73,11 @@ export async function GET(req: Request) {
   if (!session?.user?.id) return Response.json({ error: "Non connecté" }, { status: 401 });
   const bookId = new URL(req.url).searchParams.get("bookId");
   if (!bookId) return Response.json({ error: "bookId requis" }, { status: 400 });
-  const pos = await prisma.readingPosition.findUnique({
-    where: { userId_bookId: { userId: session.user.id, bookId } },
-    select: { page: true, status: true, notes: true },
-  });
-  return Response.json(pos ?? { page: 1, status: "to_read", notes: null }, { headers: { "Cache-Control": "no-store" } });
+  const pos = await db.getReadingPosition(session.user.id, bookId);
+  return Response.json(
+    pos ? { page: pos.page, status: pos.status, notes: pos.notes } : { page: 1, status: "to_read", notes: null },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }
+
 

@@ -1,5 +1,5 @@
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import LibraryGrid from "@/components/LibraryGrid";
 import type { LibraryBook, ReadingStatusKey, UserCollection } from "@/lib/books";
 
@@ -8,56 +8,25 @@ export default async function Explore() {
   const userId = session?.user?.id;
 
   const [rows, collectionRows] = await Promise.all([
-    prisma.book.findMany({
-      where: { visibility: "public" },
-      orderBy: { createdAt: "desc" },
-      take: 200,
-      select: {
-        id: true,
-        title: true,
-        category: true,
-        visibility: true,
-        pageCount: true,
-        createdAt: true,
-        userId: true,
-        user: { select: { email: true } },
-        ...(userId
-          ? {
-              positions: {
-                where: { userId },
-                select: { page: true, status: true, notes: true, updatedAt: true },
-                take: 1,
-              },
-              collections: {
-                where: { collection: { userId } },
-                select: { collectionId: true },
-              },
-            }
-          : {}),
-      },
-    }),
-    userId
-      ? prisma.collection.findMany({
-          where: { userId },
-          orderBy: { createdAt: "asc" },
-          include: { _count: { select: { books: true } } },
-        })
-      : Promise.resolve([]),
+    db.listPublicBooks(userId, 200),
+    userId ? db.listUserCollections(userId) : Promise.resolve([]),
   ]);
 
   const collections: UserCollection[] = collectionRows.map((c) => ({
     id: c.id,
     name: c.name,
     color: c.color,
-    bookCount: c._count.books,
+    bookCount: c.bookCount ?? 0,
   }));
 
   const books: LibraryBook[] = rows.map((b) => {
-    const pos = "positions" in b && Array.isArray(b.positions) ? b.positions[0] : undefined;
-    const cols = "collections" in b && Array.isArray(b.collections) ? b.collections : [];
+    const pos = b.positions[0];
     return {
       id: b.id,
       title: b.title,
+      author: b.author || "Auteur inconnu",
+      // Only expose the part before "@" — no full emails on a public page.
+      sharedBy: b.userId === userId ? "Vous" : b.user?.email.split("@")[0],
       category: b.category || "Autre",
       visibility: b.visibility,
       pageCount: b.pageCount,
@@ -66,9 +35,7 @@ export default async function Explore() {
       status: (pos?.status as ReadingStatusKey | undefined) ?? null,
       notes: pos?.notes ?? null,
       updatedAt: pos?.updatedAt.getTime() ?? null,
-      // Only expose the part before "@" — no full emails on a public page.
-      author: b.userId === userId ? "Vous" : b.user.email.split("@")[0],
-      collectionIds: cols.map((c: { collectionId: string }) => c.collectionId),
+      collectionIds: b.collections.map((c) => c.collectionId),
     };
   });
 

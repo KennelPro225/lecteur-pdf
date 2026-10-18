@@ -1,0 +1,22 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: folio-lecteur-pdf
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DB_PROVIDER=${DB_PROVIDER:-sqlite}
+      - DATABASE_URL=${DATABASE_URL:-file:/app/prisma/dev.db}
+      - AUTH_SECRET=${AUTH_SECRET:-folio-docker-production-secret-key-32chars}
+      - AUTH_TRUST_HOST=true
+    volumes:
+      - folio_db:/app/prisma
+      - folio_uploads:/app/uploads
+
+volumes:
+  folio_db:
+  folio_uploads:
