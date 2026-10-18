@@ -13,8 +13,15 @@ if (!existsSync(backupFile)) {
 const data = JSON.parse(readFileSync(backupFile, "utf-8"));
 const prisma = new PrismaClient();
 
+function inferCategory(title) {
+  const t = title.toLowerCase();
+  if (t.includes("pensees") || t.includes("marc aurele")) return "Philosophie";
+  if (t.includes("excellence") || t.includes("greene")) return "Développement personnel";
+  return "Autre";
+}
+
 async function main() {
-  console.log("Migration des données vers PostgreSQL en cours...");
+  console.log("Restauration des données dans SQLite en cours...");
 
   let userCount = 0;
   for (const u of data.users) {
@@ -29,10 +36,12 @@ async function main() {
 
   let bookCount = 0;
   for (const b of data.books) {
+    const category = b.category || inferCategory(b.title);
     await prisma.book.upsert({
       where: { id: b.id },
       update: {
         title: b.title,
+        category,
         filePath: b.filePath,
         visibility: b.visibility,
         pageCount: b.pageCount,
@@ -42,6 +51,7 @@ async function main() {
         id: b.id,
         userId: b.userId,
         title: b.title,
+        category,
         filePath: b.filePath,
         visibility: b.visibility,
         pageCount: b.pageCount,
@@ -56,26 +66,28 @@ async function main() {
   for (const p of data.positions) {
     await prisma.readingPosition.upsert({
       where: { userId_bookId: { userId: p.userId, bookId: p.bookId } },
-      update: { page: p.page, updatedAt: new Date(p.updatedAt) },
+      update: { page: p.page, status: p.status || "reading", updatedAt: new Date(p.updatedAt) },
       create: {
         userId: p.userId,
         bookId: p.bookId,
         page: p.page,
+        status: p.status || "reading",
         updatedAt: new Date(p.updatedAt),
       },
     });
     posCount++;
   }
   console.log(`✓ ${posCount} positions de lecture synchronisées`);
-  console.log("Migration des données vers PostgreSQL terminée avec succès !");
+  console.log("Restauration des données SQLite terminée avec succès !");
 }
 
 main()
   .catch((e) => {
-    console.error("Erreur lors de la migration des données :", e);
+    console.error("Erreur lors de la restauration des données :", e);
     process.exit(1);
   })
   .finally(async () => {
     await prisma.$disconnect();
   });
+
 

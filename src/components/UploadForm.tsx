@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IconClose, IconPlus, IconUpload } from "@/components/icons";
 import { loadPdfJs, renderCover } from "@/lib/pdf";
+import { BOOK_CATEGORIES, type UserCollection } from "@/lib/books";
 
 type Prepared = { cover: Blob | null; pageCount: number | null };
 
@@ -30,9 +31,17 @@ const titleFromFile = (name: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
-export default function UploadForm({ variant = "button" }: { variant?: "button" | "hero" }) {
+export default function UploadForm({
+  variant = "button",
+  collections = [],
+}: {
+  variant?: "button" | "hero";
+  collections?: UserCollection[];
+}) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
+  const [category, setCategory] = useState<string>("Roman & Fiction");
+  const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [prepared, setPrepared] = useState<Promise<Prepared> | null>(null);
@@ -54,12 +63,18 @@ export default function UploadForm({ variant = "button" }: { variant?: "button" 
 
   const reset = () => {
     setTitle("");
+    setCategory("Roman & Fiction");
+    setSelectedCollections([]);
     setFile(null);
     setPreview(null);
     setPrepared(null);
     setProgress(null);
     setError("");
     setIsPublic(false);
+  };
+
+  const toggleCollection = (id: string) => {
+    setSelectedCollections((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
   const pick = (f: File | undefined | null) => {
@@ -84,7 +99,11 @@ export default function UploadForm({ variant = "button" }: { variant?: "button" 
     const fd = new FormData();
     fd.append("file", file);
     fd.append("title", title);
+    fd.append("category", category);
     fd.append("visibility", isPublic ? "public" : "private");
+    for (const cid of selectedCollections) {
+      fd.append("collectionIds", cid);
+    }
     if (pageCount) fd.append("pageCount", String(pageCount));
     if (cover) fd.append("cover", cover, "cover.webp");
     // XHR (not fetch) to get upload progress events.
@@ -135,7 +154,7 @@ export default function UploadForm({ variant = "button" }: { variant?: "button" 
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => progress == null && setOpen(false)} />
           <form
             onSubmit={submit}
-            className="relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] flex flex-col gap-4 animate-[slideUp_.2s_ease-out]"
+            className="relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] flex flex-col gap-4 animate-[slideUp_.2s_ease-out] max-h-[90dvh] overflow-y-auto"
           >
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Ajouter un livre</h2>
@@ -191,6 +210,46 @@ export default function UploadForm({ variant = "button" }: { variant?: "button" 
               />
             </label>
 
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span className="text-stone-600">Catégorie du livre</span>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="rounded-xl border border-stone-200 bg-white px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-stone-300"
+              >
+                {BOOK_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {collections.length > 0 && (
+              <div className="flex flex-col gap-1.5 text-sm">
+                <span className="text-stone-600">Ajouter à mes listes de lecture</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {collections.map((col) => {
+                    const active = selectedCollections.includes(col.id);
+                    return (
+                      <button
+                        type="button"
+                        key={col.id}
+                        onClick={() => toggleCollection(col.id)}
+                        className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+                          active
+                            ? "bg-ink text-paper border-ink"
+                            : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
+                        }`}
+                      >
+                        {col.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <label className="flex items-center justify-between gap-3 text-sm">
               <span>
                 Partager avec la communauté
@@ -219,3 +278,4 @@ export default function UploadForm({ variant = "button" }: { variant?: "button" 
     </>
   );
 }
+

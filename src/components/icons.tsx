@@ -34,4 +34,20 @@ export const IconLock = (p: P) => (
 export const IconAa = (p: P) => (
   <svg {...base} {...p} strokeWidth={1.6}><path d="M3 19l5-13 5 13M5 14h6" /><path d="M15.5 12.5a3 3 0 115 2.2V19M20.5 15.5c-3 0-5 .6-5 2a1.6 1.6 0 003 .8" /></svg>
 );
+export const IconTag = (p: P) => (
+  <svg {...base} {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>
+);
+export const IconFolder = (p: P) => (
+  <svg {...base} {...p}><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg>
+);
+export const IconCheck = (p: P) => (
+  <svg {...base} {...p}><polyline points="20 6 9 17 4 12" /></svg>
+);
+export const IconTrash = (p: P) => (
+  <svg {...base} {...p}><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+);
+export const IconBookmark = (p: P) => (
+  <svg {...base} {...p}><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" /></svg>
+);
+
 

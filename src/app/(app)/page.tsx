@@ -5,41 +5,85 @@ import { prisma } from "@/lib/prisma";
 import UploadForm from "@/components/UploadForm";
 import LibraryGrid from "@/components/LibraryGrid";
 import BookCover from "@/components/BookCover";
-import { progressOf, type LibraryBook } from "@/lib/books";
+import {
+  effectiveStatusOf,
+  getStatusMeta,
+  progressOf,
+  type LibraryBook,
+  type ReadingStatusKey,
+  type UserCollection,
+} from "@/lib/books";
 
 export default async function Home() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
 
-  const rows = await prisma.book.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      title: true,
-      visibility: true,
-      pageCount: true,
-      createdAt: true,
-      positions: { where: { userId }, select: { page: true, updatedAt: true }, take: 1 },
-    },
-  });
+  const [rows, collectionRows] = await Promise.all([
+    prisma.book.findMany({
+      where: {
+        OR: [
+          { userId },
+          { positions: { some: { userId } } },
+          { collections: { some: { collection: { userId } } } },
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        userId: true,
+        title: true,
+        category: true,
+        visibility: true,
+        pageCount: true,
+        createdAt: true,
+        user: { select: { email: true } },
+        positions: {
+          where: { userId },
+          select: { page: true, status: true, notes: true, updatedAt: true },
+          take: 1,
+        },
+        collections: {
+          where: { collection: { userId } },
+          select: { collectionId: true },
+        },
+      },
+    }),
+    prisma.collection.findMany({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+      include: { _count: { select: { books: true } } },
+    }),
+  ]);
+
+  const collections: UserCollection[] = collectionRows.map((c) => ({
+    id: c.id,
+    name: c.name,
+    color: c.color,
+    bookCount: c._count.books,
+  }));
 
   const books: LibraryBook[] = rows.map((b) => ({
     id: b.id,
     title: b.title,
+    category: b.category || "Autre",
     visibility: b.visibility,
     pageCount: b.pageCount,
     createdAt: b.createdAt.getTime(),
     page: b.positions[0]?.page ?? null,
+    status: (b.positions[0]?.status as ReadingStatusKey | undefined) ?? null,
+    notes: b.positions[0]?.notes ?? null,
     updatedAt: b.positions[0]?.updatedAt.getTime() ?? null,
+    author: b.userId === userId ? undefined : b.user.email.split("@")[0],
+    collectionIds: b.collections.map((c) => c.collectionId),
   }));
 
   // Kindle-like "continue reading": most recently opened book not yet finished.
   const current = books
-    .filter((b) => b.updatedAt && (progressOf(b) ?? 0) < 98)
+    .filter((b) => b.updatedAt && (progressOf(b) ?? 0) < 98 && effectiveStatusOf(b) !== "completed")
     .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0];
   const currentPct = current ? progressOf(current) : null;
+  const currentStatusMeta = current ? getStatusMeta(effectiveStatusOf(current)) : null;
 
   return (
     <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
@@ -52,6 +96,18 @@ export default async function Home() {
           >
             <BookCover id={current.id} title={current.title} canGenerate priority className="w-24 sm:w-32 shrink-0" />
             <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                {current.category && (
+                  <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-stone-200/80 text-stone-700">
+                    {current.category}
+                  </span>
+                )}
+                {currentStatusMeta && (
+                  <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full border ${currentStatusMeta.badgeClass}`}>
+                    {currentStatusMeta.label}
+                  </span>
+                )}
+              </div>
               <h2 className="font-serif text-xl sm:text-2xl leading-tight line-clamp-2">{current.title}</h2>
               <p className="mt-1 text-sm text-stone-500">
                 Page {current.page}
@@ -77,23 +133,26 @@ export default async function Home() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Bibliothèque</h1>
           <p className="text-sm text-stone-500 mt-0.5">
-            {books.length} livre{books.length > 1 ? "s" : ""} · synchronisés sur tous vos appareils
+            {books.length} livre{books.length > 1 ? "s" : ""} · classés par catégories et listes de lecture
           </p>
         </div>
-        {books.length > 0 && <UploadForm />}
+        {books.length > 0 && <UploadForm collections={collections} />}
       </div>
 
       <LibraryGrid
         books={books}
         owner
+        collections={collections}
+        canCategorize
         emptyMessage={
           <div className="flex flex-col items-center gap-4">
             <div className="text-5xl">📚</div>
             <p className="max-w-xs">Votre bibliothèque est vide. Ajoutez un PDF pour commencer à lire.</p>
-            <UploadForm variant="hero" />
+            <UploadForm variant="hero" collections={collections} />
           </div>
         }
       />
     </main>
   );
 }
+
