@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "node scripts/sync-prisma-provider.mjs && prisma generate && next dev",
+    "build": "node scripts/sync-prisma-provider.mjs && prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate && node scripts/copy-pdf-worker.mjs"
+    "db:push": "node scripts/sync-prisma-provider.mjs && prisma db push && prisma generate",
+    "postinstall": "node scripts/sync-prisma-provider.mjs && prisma generate && node scripts/copy-pdf-worker.mjs"
   },
   "dependencies": {
     "@prisma/client": "5.22",

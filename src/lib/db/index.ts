@@ -5,7 +5,7 @@ import type { DatabaseAdapter, DbProviderType } from "./types";
 export * from "./types";
 
 function detectProvider(): DbProviderType {
-  const explicit = (process.env.DB_PROVIDER || "").toLowerCase().trim();
+  const explicit = (process.env.DB_PROVIDER || process.env.DB_ADAPTER || "").toLowerCase().trim();
   if (explicit === "json") return "json";
   if (explicit === "postgresql" || explicit === "postgres") return "postgresql";
   if (explicit === "sqlite") return "sqlite";

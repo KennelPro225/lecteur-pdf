@@ -6,8 +6,11 @@ echo "=== Démarrage de Folio PDF Reader (DB_PROVIDER=${DB_PROVIDER:-sqlite}) ==
 mkdir -p /app/uploads /app/prisma
 
 if [ "${DB_PROVIDER:-sqlite}" != "json" ]; then
-  echo "Synchronisation du schéma de base de données via Prisma..."
+  echo "Synchronisation du provider et du schéma de base de données via Prisma..."
+  node scripts/sync-prisma-provider.mjs
+  npx prisma generate
   npx prisma db push --skip-generate
 fi
 
 exec "$@"
+

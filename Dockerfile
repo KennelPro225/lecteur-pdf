@@ -33,7 +33,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATABASE_URL="file:./dev.db"
 ENV DB_PROVIDER="sqlite"
 
-RUN npx prisma generate && node scripts/copy-pdf-worker.mjs && npm run build
+RUN node scripts/sync-prisma-provider.mjs && npx prisma generate && node scripts/copy-pdf-worker.mjs && npm run build
 
 # ==========================================
 # Étape 3 : Image d'exécution (Runner)
